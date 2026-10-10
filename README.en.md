@@ -8,7 +8,7 @@ An experimental Windows 11 x64 app for standard RainClassroom (`www.yuketang.cn`
 
 Let the app handle repeated screenshots, answer entry and submission clicks. You bring the account and vision API; it brings the button-pressing stamina. AI can still be confidently wrong, so a successful submission is not a passing grade.
 
-**Version 0.1.3 fixes another signed-image compatibility issue that could cancel a valid pending answer. An earlier live run matched all 12 submissions against fresh official stored answers. A second classroom reached 12 accepted submissions; its final full comparison and restart check were stopped by the user and remain pending.** See [validation evidence and remaining checks](docs/VALIDATION.md).
+**Version 0.1.4 fixes an `ERR_ABORTED` failure notice when the official page redirects while entering a classroom.** An earlier live run matched all 12 submissions against fresh official stored answers. A second classroom reached 12 accepted submissions; its final full comparison and restart check were stopped by the user and remain pending. See [validation evidence and remaining checks](docs/VALIDATION.md).
 
 Real login, published-question recovery, new-question detection, original images and the configured vision API have been exercised. The screenshot function captured a complete real question in the authenticated page. Live end-to-end download-failure fallback, multiple blanks, network reconnection and grading correctness still require further acceptance.
 

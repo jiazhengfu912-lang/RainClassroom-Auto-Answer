@@ -4,6 +4,8 @@ Date: 2026-09-16. Target: Windows 11 x64. Version: 0.1.3.
 
 This document separates software checks from real platform acceptance. Test accounts, cookies, model keys, question images and logs are synthetic or local only and are not published.
 
+The latest Windows navigation fix is 0.1.4, dated 2026-10-10: [ERR_ABORTED reproduction, regression checks and installation evidence](ENTER_CLASSROOM_FIX_0.1.4.md). The records below describe the earlier 0.1.3 validation.
+
 ## Local checks
 
 | Check | Evidence | Result |

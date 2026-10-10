@@ -88,6 +88,46 @@ async function initialize() {
   });
 
   function allowedNavigation(url: string) { try { const u = new URL(url); return u.origin === origin || u.origin === 'https://open.weixin.qq.com'; } catch { return false; } }
+  async function loadPlatformPage(view: WebContentsView, url: string) {
+    const contents = view.webContents, target = new URL(url);
+    const lessonPath = /^\/lesson\/fullscreen\/v3\/[^/]+$/.test(target.pathname) ? target.pathname : null;
+    const matchesTarget = () => {
+      try {
+        const current = new URL(contents.getURL());
+        return lessonPath ? current.origin === target.origin && (current.pathname === lessonPath || current.pathname.startsWith(`${lessonPath}/`)) : allowedNavigation(current.href);
+      } catch { return false; }
+    };
+    let finish: () => void, fail: (error: Error) => void;
+    const completed = new Promise<void>((resolve, reject) => { finish = resolve; fail = reject; });
+    // 页面自行跳转可能先取消 loadURL，再完成新的主框架加载。
+    void completed.catch(() => {});
+    const onFinish = () => { if (matchesTarget()) finish(); else fail(new Error('官方页面未进入所选课堂，请重新核验登录并选择课堂')); };
+    const onFail = (_event: unknown, code: number, description: string, _url: string, isMainFrame: boolean) => {
+      if (isMainFrame && code !== -3) fail(new Error(/^ERR_[A-Z_]+$/.test(description) ? description : '官方页面加载失败，请检查网络后重试'));
+    };
+    const onDestroyed = () => fail(new Error('官方页面已关闭，请重新打开后进入课堂'));
+    const timer = setTimeout(() => fail(new Error('官方页面加载超时，请检查网络后重新进入课堂')), 20000);
+    contents.on('did-finish-load', onFinish);
+    contents.on('did-fail-load', onFail);
+    contents.on('destroyed', onDestroyed);
+    try {
+      const loaded = contents.loadURL(url).catch(error => {
+        const e = error as Error & { code?: string; errno?: number };
+        if (e.errno !== -3 && e.code !== 'ERR_ABORTED' && !/\bERR_ABORTED\b/.test(e.message ?? '')) throw error;
+        return completed;
+      });
+      await Promise.race([loaded, completed]);
+      if (!matchesTarget()) throw new Error('官方页面未进入所选课堂，请重新核验登录并选择课堂');
+    } catch (error) {
+      if (!contents.isDestroyed()) contents.stop();
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      contents.removeListener('did-finish-load', onFinish);
+      contents.removeListener('did-fail-load', onFail);
+      contents.removeListener('destroyed', onDestroyed);
+    }
+  }
   async function showPlatform(url?: string) {
     if (!platformWindow || platformWindow.isDestroyed()) {
       platformWindow = new BrowserWindow({ width: 1160, height: 850, minWidth: 640, minHeight: 500, title: '雨课堂官方页面 · 完成后返回工作台', autoHideMenuBar: true, backgroundColor: '#ffffff' });
@@ -99,8 +139,8 @@ async function initialize() {
       platformWindow.on('close', e => { e.preventDefault(); platformWindow?.hide(); main.show(); });
       view.webContents.on('will-navigate', (e, next) => { if (!allowedNavigation(next)) e.preventDefault(); });
       view.webContents.on('will-redirect', (e, next) => { if (!allowedNavigation(next)) e.preventDefault(); });
-      view.webContents.setWindowOpenHandler(({ url }) => { if (allowedNavigation(url)) void view.webContents.loadURL(url); return { action: 'deny' }; });
-      view.webContents.on('did-fail-load', (_e, code) => { if (code !== -3) notice('官方页面加载失败，请检查网络后重试'); });
+      view.webContents.setWindowOpenHandler(({ url }) => { if (allowedNavigation(url)) void loadPlatformPage(view, url).catch(() => notice('官方页面跳转失败，请检查网络后重试')); return { action: 'deny' }; });
+      view.webContents.on('did-fail-load', (_e, code, _description, _url, isMainFrame) => { if (isMainFrame && code !== -3) notice('官方页面加载失败，请检查网络后重试'); });
       await view.webContents.loadURL('about:blank');
       view.webContents.debugger.attach('1.3');
       const responses = new Map<string, string>();
@@ -127,7 +167,7 @@ async function initialize() {
       await view.webContents.debugger.sendCommand('Page.enable');
     }
     platformWindow.show();
-    if (url) await platformView!.webContents.loadURL(url);
+    if (url) await loadPlatformPage(platformView!, url);
   }
 
   let commandBusy = false;
@@ -196,6 +236,7 @@ async function initialize() {
         default: throw new Error('不支持的操作');
       }
     } catch (error) {
+      if (command.type === 'select') joining = null;
       const message = error instanceof Error ? error.message : '';
       const operation = ({login:'打开官方页面',refresh:'刷新课堂',select:'进入课堂',start:'启动答题',saveModel:'保存模型配置',testModel:'验证图片识别'} as Record<string,string>)[command.type] ?? '操作';
       const networkCode = message.match(/ERR_[A-Z_]+/)?.[0];
