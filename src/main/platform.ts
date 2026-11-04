@@ -182,7 +182,11 @@ export class Yuketang {
     if (signal.aborted || !this.alive || this.lesson?.id !== q.lessonId || this.identity?.id !== q.accountId || this.closed.has(q.questionId) || (q.deadline !== null && q.deadline - Date.now() <= 3000)) throw new SubmissionNotSentError('已暂停、收题或提交目标失效，本题未发送');
     const headers: Record<string,string> = { Cookie: cookies.map(c => `${c.name}=${c.value}`).join('; '), Authorization: `Bearer ${this.auth}`, Referer: `${this.origin}/`, Origin: this.origin };
     const csrf = cookies.find(c => c.name === 'csrftoken'); if (csrf) headers['X-CSRFToken'] = csrf.value;
-    return receipt(decode(await submitOnce(`${this.origin}/api/v3/lesson/problem/answer`, headers, { problemId: q.questionId, problemType: q.platformType, dt: Math.floor(Date.now() / 1000), result: a.answers })));
+    // 官方主观题页面发送毫秒时间及文字/图片对象；纯文字作答使用空图片字段。
+    const subjective = q.kind === 'subjective';
+    const result = subjective ? { content: a.answers[0], pics: [{ pic: '', thumb: '' }] } : a.answers;
+    const dt = subjective ? Date.now() : Math.floor(Date.now() / 1000);
+    return receipt(decode(await submitOnce(`${this.origin}/api/v3/lesson/problem/answer`, headers, { problemId: q.questionId, problemType: q.platformType, dt, result })));
   }
   private clearPending() { for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(new Error('课堂已断开')); } this.pending.clear(); }
   disconnect() { this.alive = false; this.generation++; if (this.timer) clearTimeout(this.timer); if (this.heartbeat) clearInterval(this.heartbeat); const old = this.ws; this.ws = undefined; old?.close(); this.clearPending(); this.questions.clear(); this.loadedPresentations.clear(); this.closed.clear(); this.awaitingPresentation.clear(); this.auth = ''; this.lessonToken = ''; this.lesson = null; }

@@ -1,4 +1,4 @@
-export type QuestionKind = 'single' | 'multiple' | 'blank';
+export type QuestionKind = 'single' | 'multiple' | 'blank' | 'subjective';
 export interface Lesson { id: string; classroomId: string; name: string }
 export interface Identity { id: string; name: string }
 export interface QuestionContext {

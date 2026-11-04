@@ -15,7 +15,8 @@ const problems=[
   {problemId:'9876543210123456781',problemType:1,body:'图形中标示的答案是什么？',options:[{key:'A',value:'甲'},{key:'B',value:'乙'},{key:'C',value:'丙'}],blanks:[],expected:['B']},
   {problemId:'9876543210123456782',problemType:2,body:'选择所有满足条件的选项。',options:[{key:'A',value:'甲'},{key:'B',value:'乙'},{key:'C',value:'丙'},{key:'D',value:'丁'},{key:'E',value:'戊'}],blanks:[],expected:['A','C','E']},
   {problemId:'9876543210123456783',problemType:4,body:'依次填写两个空位：坐标 ____；文字 ____。',options:[],blanks:[{},{}],expected:['x,y','中文 ∫x dx']},
-  {problemId:'9876543210123456784',problemType:1,body:'提交结果未知的测试题。',options:[{key:'A',value:'甲'},{key:'B',value:'乙'}],blanks:[],expected:['A']}
+  {problemId:'9876543210123456784',problemType:1,body:'提交结果未知的测试题。',options:[{key:'A',value:'甲'},{key:'B',value:'乙'}],blanks:[],expected:['A']},
+  {problemId:'9876543210123456785',problemType:5,body:'',options:[],blanks:[],expected:['嵌入式系统需要中央处理器、系统存储器和一组输入输出端口。']}
 ];
 function crc(b){let c=0xffffffff;for(const byte of b){c^=byte;for(let i=0;i<8;i++)c=(c>>>1)^(c&1?0xedb88320:0);}return(c^0xffffffff)>>>0;}
 function chunk(t,v){const tag=Buffer.from(t),n=Buffer.alloc(4),c=Buffer.alloc(4);n.writeUInt32BE(v.length);c.writeUInt32BE(crc(Buffer.concat([tag,v])));return Buffer.concat([n,tag,v,c]);}
@@ -87,15 +88,24 @@ try{
   await waitState(page,s=>s.connection.includes('断开'),'disconnect');
   await waitState(page,s=>s.connection==='课堂已连接','reconnect');
   await new Promise(r=>setTimeout(r,300));assert.equal(submissions.length,3);
-  current=3;brokenImage=false;unknown=true;unlock();await waitState(page,s=>s.records.some(r=>r.status==='UNKNOWN'),'unknown result');assert.equal(submissions.length,4);
-  await page.getByRole('button',{name:'停止',exact:true}).click();await page.getByRole('button',{name:'开始自动提交',exact:true}).click();await new Promise(r=>setTimeout(r,300));assert.equal(submissions.length,4);
+  current=4;brokenImage=false;unlock();
+  const subjective=await waitState(page,s=>s.records.some(r=>r.questionId===problems[4].problemId&&r.status==='ACCEPTED'),'image-only subjective translation');
+  assert.equal(subjective.question.kind,'subjective');
+  assert.equal(subjective.question.captureSource,'original');
+  assert.equal(submissions[3].problemType,5);assert.equal(submissions[3].problemId,problems[4].problemId);
+  assert.deepEqual(submissions[3].result,{content:problems[4].expected[0],pics:[{pic:'',thumb:''}]});
+  assert.ok(Number.isSafeInteger(submissions[3].dt)&&submissions[3].dt>1e12);
+  assert.match(JSON.parse(modelCalls.at(-1).body).messages[0].content,/英译中/);
+  await page.locator('.answer-content').getByText(problems[4].expected[0],{exact:true}).waitFor();
+  current=3;unknown=true;unlock();await waitState(page,s=>s.records.some(r=>r.status==='UNKNOWN'),'unknown result');assert.equal(submissions.length,5);
+  await page.getByRole('button',{name:'停止',exact:true}).click();await page.getByRole('button',{name:'开始自动提交',exact:true}).click();await new Promise(r=>setTimeout(r,300));assert.equal(submissions.length,5);
   await page.getByRole('button',{name:/^处理记录/}).click();await page.screenshot({path:'test-results/04-records.png',fullPage:true});
   assert.deepEqual(errors,[]);await application.close();application=null;
   application=await electron.launch({args:['.'],env,timeout:20000});const restarted=await application.firstWindow();await restarted.getByRole('heading',{name:'课堂工作台',exact:true}).waitFor();
-  const restored=await state(restarted);assert.equal(restored.mode,'stopped');assert.equal(restored.model.tested,true);assert.ok(restored.records.some(r=>r.status==='UNKNOWN'));assert.equal(submissions.length,4);
+  const restored=await state(restarted);assert.equal(restored.mode,'stopped');assert.equal(restored.model.tested,true);assert.ok(restored.records.some(r=>r.status==='UNKNOWN'));assert.ok(restored.records.some(r=>r.kind==='subjective'&&r.status==='ACCEPTED'));assert.equal(submissions.length,5);
   await restarted.getByRole('button',{name:'核验登录 / 刷新课堂'}).click();await waitState(restarted,s=>s.identity?.id==='12345','persistent login');
   await restarted.getByRole('button',{name:'退出',exact:true}).click();await waitState(restarted,s=>s.identity===null,'logout');
   const cookieCount=await application.evaluate(async({session})=>(await session.fromPartition('persist:rain-platform').cookies.get({})).length);assert.equal(cookieCount,0);
-  const report={passed:true,scenarios:['login','persistent login','logout clears cookies','encrypted API key','image capability probes','preview does not submit','single choice','duplicate events','multiple choice','multi-blank punctuation/order','authenticated screenshot fallback','long screenshot segmentation','minimized capture','websocket reconnect without duplicate submission','unknown receipt does not retry','restart stopped with ledger'],submissions:submissions.length,modelRequests:modelCalls.length,screenshotCount:4};
+  const report={passed:true,scenarios:['login','persistent login','logout clears cookies','encrypted API key','image capability probes','preview does not submit','single choice','duplicate events','multiple choice','multi-blank punctuation/order','authenticated screenshot fallback','long screenshot segmentation','minimized capture','websocket reconnect without duplicate submission','image-only subjective translation payload','unknown receipt does not retry','restart stopped with ledger'],submissions:submissions.length,modelRequests:modelCalls.length,screenshotCount:4};
   writeFileSync('test-results/desktop-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
 }finally{if(application)await application.close().catch(()=>{});for(const ws of sockets)ws.terminate();await new Promise(r=>wss.close(r));await new Promise(r=>server.close(r));}

@@ -8,7 +8,7 @@ export class Ledger {
     if (existsSync(path)) {
       const value = JSON.parse(readFileSync(path, 'utf8'));
       const statuses = ['QUEUED', 'CAPTURING', 'SOLVING', 'PREVIEW', 'SUBMITTING', 'ACCEPTED', 'REJECTED', 'UNKNOWN', 'SKIPPED'];
-      if (value.version !== 1 || !Array.isArray(value.records) || value.records.some((r: TaskRecord) => typeof r.key !== 'string' || !r.key || !statuses.includes(r.status) || !['single','multiple','blank'].includes(r.kind) || !Number.isFinite(r.updatedAt))) throw new Error('本地提交记录损坏，请保留文件并核对官方记录');
+      if (value.version !== 1 || !Array.isArray(value.records) || value.records.some((r: TaskRecord) => typeof r.key !== 'string' || !r.key || !statuses.includes(r.status) || !['single','multiple','blank','subjective'].includes(r.kind) || !Number.isFinite(r.updatedAt))) throw new Error('本地提交记录损坏，请保留文件并核对官方记录');
       for (const r of value.records as TaskRecord[]) this.records.set(r.key, r.status === 'SUBMITTING' ? { ...r, status: 'UNKNOWN', message: '上次提交被中断，请核对官方记录' } : r);
       this.flush();
     }

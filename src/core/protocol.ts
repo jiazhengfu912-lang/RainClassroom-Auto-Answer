@@ -20,11 +20,11 @@ export function plain(value: unknown): string {
 }
 export function normalize(raw: any, slide: any, accountId: string, lessonId: string, presentationId: string): QuestionContext {
   const platformType = Number(raw.problemType);
-  // 官方 web 1.2.305 的课堂报告组件：1 单选、2 多选、4 填空。
-  const kind = platformType === 1 ? 'single' : platformType === 2 ? 'multiple' : platformType === 4 ? 'blank' : null;
-  if (!kind) throw new Error('该题型不在首版范围内');
+  // 官方课堂题型：1 单选、2 多选、4 填空、5 主观题。
+  const kind = platformType === 1 ? 'single' : platformType === 2 ? 'multiple' : platformType === 4 ? 'blank' : platformType === 5 ? 'subjective' : null;
+  if (!kind) throw new Error('暂不支持该题型');
   const options = Array.isArray(raw.options) ? raw.options.map((o: any) => ({ key: String(o.key ?? ''), text: plain(o.value ?? o.content ?? o.text) })) : [];
-  if (kind !== 'blank' && (options.length < 2 || options.some((o: any) => !o.key) || new Set(options.map((o: any) => o.key)).size !== options.length)) throw new Error('选项标识不完整');
+  if ((kind === 'single' || kind === 'multiple') && (options.length < 2 || options.some((o: any) => !o.key) || new Set(options.map((o: any) => o.key)).size !== options.length)) throw new Error('选项标识不完整');
   const blankCount = Array.isArray(raw.blanks) ? raw.blanks.length : 0;
   if (kind === 'blank' && blankCount < 1) throw new Error('无法核实填空数量');
   const html = String(raw.body ?? '');
@@ -52,7 +52,8 @@ export function parseAnswer(text: string, q: QuestionContext): AnswerProposal {
   const answers: string[] = a.answers.map((s: string) => s.trim());
   if (q.kind === 'single' && answers.length !== 1) throw new Error('单选必须恰好一个答案');
   if (q.kind === 'blank' && answers.length !== q.blankCount) throw new Error('填空数量不匹配');
-  if (q.kind !== 'blank' && (!answers.length || new Set(answers).size !== answers.length || answers.some(s => !q.options.some(o => o.key === s)))) throw new Error('模型返回无效或重复选项');
+  if (q.kind === 'subjective' && (answers.length !== 1 || answers[0].length > 1000)) throw new Error('主观题需要一段不超过 1000 字的文字答案');
+  if ((q.kind === 'single' || q.kind === 'multiple') && (!answers.length || new Set(answers).size !== answers.length || answers.some(s => !q.options.some(o => o.key === s)))) throw new Error('模型返回无效或重复选项');
   return { kind: q.kind, answers, explanation: typeof a.explanation === 'string' ? a.explanation.slice(0, 3000) : '' };
 }
 export function receipt(raw: any): SubmissionReceipt {

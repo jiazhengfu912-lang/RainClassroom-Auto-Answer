@@ -31,7 +31,7 @@ function locate(questionId: string, coverUrl?: string) {
   });
   if (!element && coverUrl) {
     // 当前 fullscreen/v3 用整张封面承载题干与选项，答题按钮覆盖在封面上。
-    const covers = [...document.querySelectorAll<HTMLImageElement>('.page-exercise .slide__wrap > img.cover')];
+    const covers = [...document.querySelectorAll<HTMLImageElement>('.page-exercise .slide__wrap > img.cover,.page-subjective .slide__wrap > img.cover')];
     const matches = covers.filter(img => {
       try { return visible(img) && img.complete && img.naturalWidth >= 100 && imageIdentity(img.currentSrc) === imageIdentity(coverUrl); } catch { return false; }
     });

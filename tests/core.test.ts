@@ -37,7 +37,13 @@ describe('protocol and identifiers', () => {
   });
   it('preserves 64-bit IDs without number rounding', () => { const raw = decode('{"id":9876543210123456789,"code":0}'); expect(raw.id).toBe('9876543210123456789'); expect(id(raw.id)).toBe(raw.id); expect(() => id(9876543210123456789)).toThrow(); });
   it.each([['1','single'], ['2','multiple'], ['4','blank']])('uses official classroom type %s = %s', (type, kind) => { const q = normalize({ problemId: '8', problemType: type, body: '<p>题干</p>', options: [{ key: 'A', value: '1' }, { key: 'B', value: '2' }], blanks: [{}, {}], result: null }, { cover: 'https://www.yuketang.cn/image' }, '1','2','3'); expect(q.kind).toBe(kind); expect(q.stem).toBe('题干'); });
-  it.each([0,3,5,6,9])('rejects unsupported type %d', type => { expect(() => normalize({ problemType: type }, {}, '1','2','3')).toThrow(); });
+  it.each([0,3,6,9])('rejects unsupported type %d', type => { expect(() => normalize({ problemType: type }, {}, '1','2','3')).toThrow(); });
+  it('recognizes an image-only subjective question without options or blanks', () => {
+    const cover = 'https://www.yuketang.cn/translation.png';
+    const q = normalize({ problemId: '8', problemType: '5', body: '', result: null }, { cover }, '1','2','3');
+    expect(q).toMatchObject({ kind: 'subjective', imageUrls: [cover], options: [], blankCount: 0, answered: false });
+    expect(normalize({ problemId: '8', problemType: 5, result: { content: '已提交', pics: [] } }, { cover }, '1','2','3').answered).toBe(true);
+  });
   it('requires explicit blanks', () => expect(() => normalize({ problemType: 4, body: '____', problemId: '7' }, {},'1','2','3')).toThrow('填空数量'));
   it('detects revision changes and preserves image-only option keys', () => { const raw = { problemType: 1, problemId: '7', body: '题干', options: [{ key:'A',value:'<img src="https://www.yuketang.cn/a.png">' },{key:'B',value:'2'}] }; const a = normalize(raw, {},'1','2','3'); const b = normalize({...raw,body:'changed'}, {},'1','2','3'); expect(a.options[0].key).toBe('A'); expect(a.imageUrls).toContain('https://www.yuketang.cn/a.png'); expect(a.revision).not.toBe(b.revision); });
   it('rejects incomplete counting information', () => expect(() => deadlineFromInfo({ limit: 10 })).toThrow());
@@ -46,6 +52,12 @@ describe('protocol and identifiers', () => {
   it('keeps acceptance separate from correctness', () => { expect(receipt({code:0}).status).toBe('ACCEPTED'); expect(receipt({code:123}).status).toBe('REJECTED'); });
 });
 describe('model output', () => {
+  it('accepts a single multiline translation and rejects empty, split or oversized subjective answers', () => {
+    const q = { ...question(), kind: 'subjective' as const, platformType: 5, options: [] };
+    const parse = (answers: string[]) => parseAnswer(JSON.stringify({ kind: 'subjective', answers }), q);
+    expect(parse(['中央处理器（CPU）。\n系统存储器。']).answers).toEqual(['中央处理器（CPU）。\n系统存储器。']);
+    for (const answers of [[], [' '], ['甲', '乙'], ['字'.repeat(1001)]]) expect(() => parse(answers)).toThrow();
+  });
   it('accepts one valid choice and optional markdown fencing', () => expect(parseAnswer('```json\n{"kind":"single","answers":["B"]}\n```',question()).answers).toEqual(['B']));
   it.each(['not json','{"kind":"single","answers":[]}','{"kind":"single","answers":["A","B"]}','{"kind":"single","answers":["C"]}','{"kind":"single","answers":[2]}','{"kind":"blank","answers":["A"]}'])('rejects invalid output %s', text => expect(() => parseAnswer(text,question())).toThrow());
   it('retains multiple-choice selection and rejects duplicates', () => { const q = {...question(),kind:'multiple' as const,platformType:2}; expect(parseAnswer('{"kind":"multiple","answers":["B","A"]}',q).answers).toEqual(['B','A']); expect(() => parseAnswer('{"kind":"multiple","answers":["A","A"]}',q)).toThrow(); });
